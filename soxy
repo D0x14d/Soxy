@@ -1,0 +1,179 @@
+#!/bin/env bash
+
+##########################################
+# Author: a0x14d
+# summary: This script is used to download latest proxy and add to temp proxy list to run custom config with pressistance proxy
+# version: 1.0
+# License: MIT
+# Last Updated: 19-8-2024
+# Usage: soxy [option]
+##########################################
+
+# Bright color codes using tput
+FG_BRIGHT_RED="\e[91m"
+FG_BRIGHT_YELLOW="\e[93m"
+FG_BRIGHT_BLUE="\e[94m"
+FG_BRIGHT_CYAN="\e[96m"
+FG_BRIGHT_WHITE="\e[97m"
+# normal and bright colors background
+BG_BRIGHT_RED="\e[101m"
+
+# tput text formatting
+UNDERLINE="\e[4m "
+RESET="\e[0m "
+ITALIC="\e[3m "
+HTAB="\e[10G"
+
+declare version="1.0"
+function put() {
+  echo -en "$@"
+}
+
+function ManualProxy() {
+  put "${FG_BRIGHT_BLUE}Enter the proxy Ip address: ${RESET}"
+  put "$FG_BRIGHT_CYAN"
+  read -r proxy_ip
+  put "$RESET"
+  put "${FG_BRIGHT_BLUE}Enter the proxy port: ${RESET}"
+  put "$FG_BRIGHT_CYAN"
+  read -r proxy_port
+  put "$RESET"
+  put "${FG_BRIGHT_BLUE}Enter the Socks proxy [ ${YELLOW}socks4 OR socks5${RESET}${FG_BRIGHT_BLUE} ]: ${RESET}"
+  put "$FG_BRIGHT_CYAN"
+  read -r proxy_type
+  put "$RESET"
+  echo "$proxy_type $proxy_ip $proxy_port" >>/tmp/proxy.conf
+}
+
+function AutoProxy() {
+  put "${FG_BRIGHT_BLUE} Enter How Many Socks You Want To Add: ${RESET}"
+  put "$FG_BRIGHT_CYAN"
+  read -r socks_count
+  put "$RESET"
+  put "${FG_BRIGHT_BLUE}Enter the Socks proxy [ ${FG_BRIGHT_YELLOW}socks4 OR socks5${RESET}${FG_BRIGHT_BLUE} ]: ${RESET}"
+  put "$FG_BRIGHT_CYAN"
+  read -r proxy_type
+  put "$RESET"
+  URL="https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/$proxy_type/data.txt"
+  if [ "$proxy_type" == "socks4" ]; then
+    cat <(curl --silent "$URL" | cut -d / -f 3 | sed 's/^/socks4 /g; s/:/ /g' | shuf -n "$socks_count") >>/tmp/proxy.conf
+
+  elif [ "$proxy_type" == "socks5" ]; then
+    cat <(curl --silent "$URL" | cut -d / -f 3 | sed 's/^/socks5 /g; s/:/ /g' | shuf -n "$socks_count") >>/tmp/proxy.conf
+  else
+    put "\n${HTAB}${BG_BRIGHT_RED}${FG_BRIGHT_WHITE}Invalid Proxy Type\n${RESET}"
+  fi
+}
+
+function Usage() {
+  cat <<EOF
+Usage: $0 [options]
+Options:
+   -h, --help      Display this help message.
+   -v, --version   Show program's version number.
+   -m, --manual    Add proxy manually.
+   -d,             By Default proxy isn Random chains if you add -d it truns [Dynamic]
+   -a, --auto      Add proxy automatically.
+   -u, --update    Update script Latest version 
+
+Examples:
+    soxy -m -d    # Add proxy manually with dynamic chain
+    soxy -a       # Add proxy automatically
+    soxy -v       # Show version
+    soxy -a -d    # Add proxy automatically with dynamic chain
+
+EOF
+}
+#
+function Banner() {
+
+  banner='
+ ___  _____  ___  _ 
+/ __|/ _ \ \/ /| | |
+\__ \ (_)  ><  |_| |
+|___/\___/_/\_\__, |
+               __/ |
+              |___/
+'
+  colored_banner="${FG_BRIGHT_RED}${banner}${RESET}"
+  echo -e "${colored_banner}"
+  put "${HTAB}${FG_BRIGHT_BLUE}\t.v1.0 \n${RESET}"
+}
+#
+function TempProxyConfig() {
+  cat <<EOF >/tmp/proxy.conf
+#dynamic_chain
+#strict_chain
+#round_robin_chain
+random_chain
+proxy_dns
+remote_dns_subnet 224
+tcp_read_time_out 15000
+tcp_connect_time_out 8000
+[ProxyList]
+# defaults set to "tor"
+# socks4 	127.0.0.1 9050
+# socks5 	127.0.0.1 9050
+EOF
+
+}
+
+function PressistanceProxy() {
+  while true; do
+    echo -en "${FG_BRIGHT_RED}[Soxy]> ${RESET}"
+    read -r -a cmd
+    if [[ "${cmd[*]}" == "exit" ]]; then
+      break
+    fi
+    proxychains4 -f /tmp/proxy.conf "${cmd[@]}"
+    echo
+  done
+
+}
+
+# function Update() {
+#
+# }
+
+function main() {
+
+  case "$1" in
+  -h | --help)
+    Usage
+    ;;
+  -v | --version)
+    echo -e "${FG_BRIGHT_BLUE}Version: $version ${RESET}"
+    ;;
+  -m | --manual)
+    ManualProxy
+    PressistanceProxy
+    ;;
+  -a | --auto)
+    AutoProxy
+    PressistanceProxy
+    ;;
+  -U | --update)
+    Update
+    ;;
+  *)
+    Banner
+    Usage
+    ;;
+  esac
+}
+
+if command -v proxychains4 >/dev/null; then
+
+  TempProxyConfig
+  for i in "$@"; do
+    if [ "$i" == "-d" ]; then
+      sed -i 's/random_chain/#random_chain/g' /tmp/proxy.conf
+      sed -i 's/#dynamic_chain/dynamic_chain/g' /tmp/proxy.conf
+    fi
+  done
+  main "$@"
+else
+  put "${BG_BRIGHT_RED}${FG_BRIGHT_WHITE}Proxychains is not installed${RESET}"
+  sleep 1
+  xdg-open https://command-not-found.com/proxychains4
+fi
